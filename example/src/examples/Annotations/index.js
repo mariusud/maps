@@ -1,4 +1,5 @@
 export { default as CustomCallout } from './CustomCallout';
+export { default as LongPressDragShapeSource } from './LongPressDragShapeSource';
 export { default as Heatmap } from './Heatmap';
 export { default as MarkerView } from './MarkerView';
 export { default as PointAnnotationAnchors } from './PointAnnotationAnchors';

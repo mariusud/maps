@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.View.OnLayoutChangeListener
 import android.view.ViewGroup
@@ -180,6 +181,25 @@ open class RNMBXMapView(private val mContext: Context, var mManager: RNMBXMapVie
     private var wasGestureActive = false
     private var isGestureActive = false
 
+    /**
+     * Set to true after a MAP_LONG_CLICK is dispatched to JS. While true,
+     * OnMoveListener.onMove consumes the gesture (returns true) without panning the map,
+     * so React Native's onTouchMove can update the view instead.
+     * Cleared in onMoveEnd or on ACTION_UP/CANCEL.
+     */
+    private var mAfterLongPress = false
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (mAfterLongPress) {
+            val action = ev.actionMasked
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                Logger.d(LOG_TAG, "dispatchTouchEvent: finger lifted, clearing mAfterLongPress")
+                mAfterLongPress = false
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     var mapViewImpl: String? = null
 
     val mapView: MapView
@@ -297,10 +317,19 @@ open class RNMBXMapView(private val mContext: Context, var mManager: RNMBXMapVie
             }
 
             override fun onMove(moveGestureDetector: MoveGestureDetector): Boolean {
+                if (mAfterLongPress) {
+                    Logger.d(LOG_TAG, "onMove: mAfterLongPress=true, consuming gesture (map will not pan)")
+                    return true
+                }
                 return mapGesture(MapGestureType.Move, moveGestureDetector)
             }
 
             override fun onMoveEnd(moveGestureDetector: MoveGestureDetector) {
+                if (mAfterLongPress) {
+                    Logger.d(LOG_TAG, "onMoveEnd: clearing mAfterLongPress")
+                    mAfterLongPress = false
+                    return
+                }
                 mapGestureEnd(MapGestureType.Move, moveGestureDetector)
             }
         })
@@ -734,6 +763,8 @@ open class RNMBXMapView(private val mContext: Context, var mManager: RNMBXMapVie
         }
         val screenPoint = mMap?.pixelForCoordinate(point)
         if (screenPoint != null) {
+            Logger.d(LOG_TAG, "onMapLongClick: setting mAfterLongPress=true, firing MAP_LONG_CLICK")
+            mAfterLongPress = true
             val event = MapClickEvent(_this, LatLng(point), screenPoint, EventTypes.MAP_LONG_CLICK)
             mManager.handleEvent(event)
         }
